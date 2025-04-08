@@ -4,7 +4,15 @@ from typing import List, Dict
 from pydantic import BaseModel, Field
 from crewai import LLM
 from crewai.flow.flow import Flow, listen, start
-from reasearcher_content.crews.content_crew.content_crew import ContentCrew
+from researcher_content.crews.content_crew.content_crew import ContentCrew
+# from langchain_huggingface import HuggingFaceEndpoint
+# from langchain_groq import ChatGroq
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+groq_api_key = os.getenv("GROQ_API_KEY")
 
 # Define our models for structured data
 class Section(BaseModel):
@@ -53,7 +61,10 @@ class GuideCreatorFlow(Flow[GuideCreatorState]):
         print("Creating guide outline...")
 
         # Initialize the LLM
-        llm = LLM(model="openai/gpt-4o-mini", response_format=GuideOutline)
+        # llm = HuggingFaceEndpoint(repo_id="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+        llm = LLM(model="groq/llama-3.1-70b-versatile")
+        # llm = ChatGroq(api_key =groq_api_key, model= "llama3-8b-8192")
+        # llm = LLM(model="openai/gpt-4o-mini", response_format=GuideOutline)
 
         # Create the messages for the outline
         messages = [
@@ -75,7 +86,21 @@ class GuideCreatorFlow(Flow[GuideCreatorState]):
         response = llm.call(messages=messages)
 
         # Parse the JSON response
-        outline_dict = json.loads(response)
+        # outline_dict = json.loads(response)
+        # Try to parse the JSON response
+        try:
+            outline_dict = json.loads(response)
+        except json.JSONDecodeError:
+            # If parsing fails, try to extract JSON from the response
+            # Sometimes the model might include additional text
+            import re
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                outline_dict = json.loads(json_match.group(0))
+            else:
+                raise Exception("Could not extract valid JSON from the response")
+
+
         self.state.guide_outline = GuideOutline(**outline_dict)
 
         # Save the outline to a file
